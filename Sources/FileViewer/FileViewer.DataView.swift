@@ -30,7 +30,7 @@ extension FileViewer {
 								.minimumScaleFactor(0.5)
 
 							let rowData = data.subdata(in: (row * bytesPerRow)..<(min((row + 1) * bytesPerRow, data.count)))
-							Text(rowData.hexString)
+							Text(rowData.hexString.padding(toLength: bytesPerRow * 2, withPad: " ", startingAt: 0))
 								.padding(.trailing, 5)
 
 							Text(String(data: rowData, encoding: .ascii) ?? "")

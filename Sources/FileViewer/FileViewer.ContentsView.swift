@@ -52,19 +52,18 @@ extension FileViewer {
 
 		private var scrollableContents: some View {
 			ScrollView {
-				VStack {
-					switch fileType {
-					case .json:
+				VStack(alignment: .leading) {
+					if fileType.conforms(to: .json) {
 						Text(source.data?.prettyPrintedJSON ?? "Unable to display")
-
-					case .text, .xml, .xmlPropertyList:
+							.frame(maxWidth: .infinity, alignment: .leading)
+					} else if fileType.conforms(to: .text) || fileType.conforms(to: .xml) {
 						Text(stringContent ?? "Unable to display")
-
-					default:
+					} else {
 						Text(fileType.description)
 						Text(propertyListContent ?? "Unable to display")
 					}
 				}
+				.padding(.horizontal)
 				.multilineTextAlignment(.leading)
 				.font(.system(size: 14).monospaced())
 			}
