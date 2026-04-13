@@ -7,7 +7,7 @@ import AVKit
 
 extension UTType {
 	var isMovie: Bool {
-		self == .movie || self == .mpeg4Movie || self == .quickTimeMovie
+		conforms(to: .movie) || conforms(to: .audiovisualContent) && !isAudio
 	}
 }
 

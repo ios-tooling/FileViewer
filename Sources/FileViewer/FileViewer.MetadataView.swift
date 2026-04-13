@@ -7,7 +7,7 @@ import AVFoundation
 
 extension UTType {
 	var isAudio: Bool {
-		identifier.contains("audio")
+		conforms(to: .audio)
 	}
 }
 

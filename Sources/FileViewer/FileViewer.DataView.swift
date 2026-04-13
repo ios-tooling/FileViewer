@@ -10,9 +10,13 @@ extension FileViewer {
 		init(source: FileViewerSource) {
 			self.data = source.data ?? Data()
 			self.bytesPerRow = 12
+			self.visibleRows = Self.visibleRows(byteCount: data.count, bytesPerRow: bytesPerRow)
+		}
 
-			let fullRows = data.count / bytesPerRow
-			self.visibleRows = fullRows + (data.count % bytesPerRow == 0 ? 0 : 1)
+		static func visibleRows(byteCount: Int, bytesPerRow: Int) -> Int {
+			guard bytesPerRow > 0 else { return 0 }
+			let fullRows = byteCount / bytesPerRow
+			return fullRows + (byteCount % bytesPerRow == 0 ? 0 : 1)
 		}
 
 		var body: some View {
