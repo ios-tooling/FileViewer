@@ -112,81 +112,129 @@ struct DataViewTests {
 		}
 	}
 
-	// MARK: - spacedHex
+	// MARK: - byteIndex (position → byte mapping used by drag selection)
 
-	@Test func spacedHexThreeBytesHaveNoGroupSpace() {
-		// Fewer than 4 bytes → no group boundary
-		let result = FileViewer.DataView.spacedHex(of: Data([0x01, 0xab, 0xff]), bytesPerRow: 3)
+	@Test func byteIndexReturnsNilForEmptyRow() {
+		let idx = FileViewer.DataView.byteIndex(at: 10, rowStart: 0, rowLen: 0, bytesPerRow: 8, cellWidth: 17)
+		#expect(idx == nil)
+	}
+
+	@Test func byteIndexClampsNegativeXToFirstByte() {
+		let idx = FileViewer.DataView.byteIndex(at: -5, rowStart: 100, rowLen: 8, bytesPerRow: 8, cellWidth: 17)
+		#expect(idx == 100)
+	}
+
+	@Test func byteIndexHitsFirstCellAtZero() {
+		let idx = FileViewer.DataView.byteIndex(at: 0, rowStart: 0, rowLen: 8, bytesPerRow: 8, cellWidth: 17)
+		#expect(idx == 0)
+	}
+
+	@Test func byteIndexHitsSecondCell() {
+		// x = 17 → falls into cell 1 (offset 17..34)
+		let idx = FileViewer.DataView.byteIndex(at: 17, rowStart: 0, rowLen: 8, bytesPerRow: 8, cellWidth: 17)
+		#expect(idx == 1)
+	}
+
+	@Test func byteIndexAccountsForGroupGap() {
+		// bytesPerRow=8, cellWidth=17, groupGapWidth=10 (class constant).
+		// After 4 bytes: 4*17 = 68, then 10pt gap → byte 4 starts at 78
+		let before = FileViewer.DataView.byteIndex(at: 72, rowStart: 0, rowLen: 8, bytesPerRow: 8, cellWidth: 17)
+		let after = FileViewer.DataView.byteIndex(at: 80, rowStart: 0, rowLen: 8, bytesPerRow: 8, cellWidth: 17)
+		#expect(before == 3)   // x=72 is in the gap, picks last cell that ended before it
+		#expect(after == 4)    // x=80 is in cell 4 (offset 78..95)
+	}
+
+	@Test func byteIndexClampsPastEndToLastByte() {
+		// Row length 5, any x past the content maps to byte 4
+		let idx = FileViewer.DataView.byteIndex(at: 1000, rowStart: 0, rowLen: 5, bytesPerRow: 8, cellWidth: 17)
+		#expect(idx == 4)
+	}
+
+	@Test func byteIndexRespectsRowStartOffset() {
+		// Row starts at byte 16, first hit should be 16, not 0
+		let idx = FileViewer.DataView.byteIndex(at: 5, rowStart: 16, rowLen: 8, bytesPerRow: 8, cellWidth: 17)
+		#expect(idx == 16)
+	}
+
+	// MARK: - selectedRange via selection state (reachable through DataView's public API)
+
+	@Test func selectedRangeIsNilByDefault() {
+		let view = FileViewer.DataView(source: .data(Data([0, 1, 2]), name: "t.bin"))
+		#expect(view.selectedRange == nil)
+	}
+
+	// MARK: - asciiString (for Cmd-C)
+
+	@Test func asciiStringForPrintableBytes() {
+		let result = FileViewer.DataView.asciiString(for: Data("hello".utf8), range: 0..<5)
+		#expect(result == "hello")
+	}
+
+	@Test func asciiStringSubstitutesDotForNonPrintable() {
+		let result = FileViewer.DataView.asciiString(for: Data([0x48, 0x00, 0x69, 0x7f, 0x21]), range: 0..<5)
+		#expect(result == "H.i.!")
+	}
+
+	@Test func asciiStringForPartialRange() {
+		let result = FileViewer.DataView.asciiString(for: Data("hello world".utf8), range: 6..<11)
+		#expect(result == "world")
+	}
+
+	@Test func asciiStringClampsUpperBound() {
+		// Range past end should clamp, not crash
+		let result = FileViewer.DataView.asciiString(for: Data("abc".utf8), range: 1..<100)
+		#expect(result == "bc")
+	}
+
+	@Test func asciiStringClampsLowerBound() {
+		let result = FileViewer.DataView.asciiString(for: Data("abc".utf8), range: -5..<2)
+		#expect(result == "ab")
+	}
+
+	@Test func asciiStringEmptyRange() {
+		let result = FileViewer.DataView.asciiString(for: Data("abc".utf8), range: 1..<1)
+		#expect(result == "")
+	}
+
+	@Test func asciiStringEmptyData() {
+		let result = FileViewer.DataView.asciiString(for: Data(), range: 0..<10)
+		#expect(result == "")
+	}
+
+	// MARK: - hexString (for Cmd-Shift-C)
+
+	@Test func hexStringJoinsBytesContiguously() {
+		let result = FileViewer.DataView.hexString(for: Data([0x01, 0xab, 0xff]), range: 0..<3)
 		#expect(result == "01abff")
 	}
 
-	@Test func spacedHexGroupsEveryFourBytes() {
-		let result = FileViewer.DataView.spacedHex(of: Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]), bytesPerRow: 8)
-		#expect(result.hasPrefix("01020304 0506"))
+	@Test func hexStringForPartialRange() {
+		let result = FileViewer.DataView.hexString(for: Data([0x11, 0x22, 0x33, 0x44]), range: 1..<3)
+		#expect(result == "2233")
 	}
 
-	@Test func spacedHexEightBytesIsTwoGroups() {
-		let result = FileViewer.DataView.spacedHex(of: Data(0x01...0x08), bytesPerRow: 8)
-		#expect(result == "01020304 05060708")
-	}
-
-	@Test func spacedHexSixteenBytesIsFourGroups() {
-		let data = Data(0x01...0x10)
-		let result = FileViewer.DataView.spacedHex(of: data, bytesPerRow: 16)
-		#expect(result == "01020304 05060708 090a0b0c 0d0e0f10")
-	}
-
-	@Test func spacedHexPadsShortRowToFullWidth() {
-		// 8 bytes per row: full width = 8*2 + (8-1)/4 = 16 + 1 = 17 chars
-		let result = FileViewer.DataView.spacedHex(of: Data([0x12, 0x34]), bytesPerRow: 8)
-		#expect(result.count == 17)
-		#expect(result.hasPrefix("1234"))
-	}
-
-	@Test func spacedHexSingleByte() {
-		let result = FileViewer.DataView.spacedHex(of: Data([0xff]), bytesPerRow: 1)
+	@Test func hexStringSingleByte() {
+		let result = FileViewer.DataView.hexString(for: Data([0xff, 0x00]), range: 0..<1)
 		#expect(result == "ff")
 	}
 
-	@Test func spacedHexEmptyDataStillPadsToFullWidth() {
-		// 16 bytes per row → 16*2 + 3 group separators = 35 chars
-		let result = FileViewer.DataView.spacedHex(of: Data(), bytesPerRow: 16)
-		#expect(result.count == 35)
-		#expect(result.allSatisfy { $0 == " " })
+	@Test func hexStringClampsUpperBound() {
+		let result = FileViewer.DataView.hexString(for: Data([0x12, 0x34]), range: 0..<10)
+		#expect(result == "1234")
 	}
 
-	@Test func spacedHexGuardsZeroBytesPerRow() {
-		#expect(FileViewer.DataView.spacedHex(of: Data([0x42]), bytesPerRow: 0) == "")
+	@Test func hexStringClampsLowerBound() {
+		let result = FileViewer.DataView.hexString(for: Data([0x12, 0x34]), range: -5..<1)
+		#expect(result == "12")
 	}
 
-	// MARK: - spacedAscii
-
-	@Test func spacedAsciiThreeCharsHaveNoGroupSpace() {
-		let result = FileViewer.DataView.spacedAscii(of: Data("abc".utf8))
-		#expect(result == "abc")
+	@Test func hexStringEmptyRange() {
+		let result = FileViewer.DataView.hexString(for: Data([0x12]), range: 0..<0)
+		#expect(result == "")
 	}
 
-	@Test func spacedAsciiGroupsEveryFourBytes() {
-		let result = FileViewer.DataView.spacedAscii(of: Data("abcdef".utf8))
-		#expect(result == "abcd ef")
-	}
-
-	@Test func spacedAsciiEightBytesIsTwoGroups() {
-		let result = FileViewer.DataView.spacedAscii(of: Data("abcdefgh".utf8))
-		#expect(result == "abcd efgh")
-	}
-
-	@Test func spacedAsciiSubstitutesDotForNonPrintable() {
-		let result = FileViewer.DataView.spacedAscii(of: Data([0x00, 0x41, 0x01, 0x7f]))
-		#expect(result == ".A..")  // within first group of 4, no separator yet
-	}
-
-	@Test func spacedAsciiSubstitutesAcrossGroupBoundary() {
-		let result = FileViewer.DataView.spacedAscii(of: Data([0x00, 0x41, 0x42, 0x43, 0x01, 0x7f]))
-		#expect(result == ".ABC ..")
-	}
-
-	@Test func spacedAsciiEmpty() {
-		#expect(FileViewer.DataView.spacedAscii(of: Data()) == "")
+	@Test func hexStringEmptyData() {
+		let result = FileViewer.DataView.hexString(for: Data(), range: 0..<10)
+		#expect(result == "")
 	}
 }
