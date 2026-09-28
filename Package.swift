@@ -14,7 +14,7 @@ let package = Package(
 			targets: ["FileViewer"]),
 	],
 	dependencies: [
-		.package(url: "https://github.com/ios-tooling/Suite.git", from: "1.0.139"),
+		.package(url: "https://github.com/ios-tooling/Suite.git", from: "1.4.22"),
 	],
 	targets: [
 		.target(
