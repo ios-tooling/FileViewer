@@ -27,6 +27,7 @@ extension FileViewer {
 		let data: Data
 		let name: String
 		let explicitType: UTType?
+		@State private var archive: FileViewerZipArchive?
 
 		private var resolvedType: UTType {
 			explicitType ?? UTType(filenameExtension: (name as NSString).pathExtension) ?? .data
@@ -38,8 +39,10 @@ extension FileViewer {
 				LabeledMeta(label: "Type", data: resolvedType.identifier)
 				LabeledMeta(label: "Size", data: Int64(data.count).bytesString)
 				LabeledMeta(label: "Bytes", data: data.count.formatted() + " b")
+				if let archive { ZipContentsRow(archive: archive, name: name) }
 			}
 			.listStyle(.plain)
+			.task(id: data) { archive = FileViewerZipArchive.isZip(data) ? try? FileViewerZipArchive(data: data) : nil }
 		}
 	}
 
@@ -47,6 +50,7 @@ extension FileViewer {
 		let url: URL
 		let resourceValues: [URLResourceKey: Any]
 		@State private var audioDuration: TimeInterval?
+		@State private var archive: FileViewerZipArchive?
 
 		#if !os(watchOS)
 		@State var player: AVPlayer?
@@ -102,6 +106,7 @@ extension FileViewer {
 				if let audioDuration {
 					LabeledMeta(label: "Audio duration", data: audioDuration.durationString(style: .milliseconds, roundUp: false))
 				}
+				if let archive { ZipContentsRow(archive: archive, name: url.lastPathComponent) }
 				ForEach(URLResourceKey.propertiesOfInterest, id: \.rawValue) { key in
 					if let object = resourceValues[key] {
 						metaRow(for: key, object: object)
@@ -109,6 +114,7 @@ extension FileViewer {
 				}
 			}
 			.listStyle(.plain)
+			.task(id: url) { archive = FileViewerZipArchive(zipAt: url) }
 			#if !os(watchOS)
 			.task { audioDuration = try? await url.audioDuration }
 			#endif
